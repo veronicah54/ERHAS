@@ -1,323 +1,264 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import axios from 'axios';
-import {
-  ExclamationTriangleIcon,
-  PhoneIcon,
-  MapPinIcon,
-  ClockIcon,
-  HeartIcon,
-  TruckIcon
-} from '@heroicons/react/24/outline';
+const mongoose = require('mongoose');
 
-const Emergency = () => {
-  const { user, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
-  const [emergencies, setEmergencies] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (isAuthenticated && user?.role === 'patient') {
-      fetchEmergencies();
-    } else {
-      setLoading(false);
+const emergencySchema = new mongoose.Schema({
+  patient: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  emergencyType: {
+    type: String,
+    required: [true, 'Emergency type is required'],
+    enum: [
+      'cardiac_arrest',
+      'stroke',
+      'severe_bleeding',
+      'breathing_difficulty',
+      'unconsciousness',
+      'severe_pain',
+      'allergic_reaction',
+      'poisoning',
+      'burns',
+      'fracture',
+      'accident',
+      'other'
+    ]
+  },
+  severity: {
+    type: String,
+    required: [true, 'Severity level is required'],
+    enum: ['low', 'medium', 'high', 'critical'],
+    default: 'medium'
+  },
+  symptoms: {
+    type: [String],
+    required: [true, 'Symptoms are required']
+  },
+  description: {
+    type: String,
+    required: [true, 'Description is required'],
+    maxlength: [1000, 'Description cannot exceed 1000 characters']
+  },
+  location: {
+    address: {
+      type: String,
+      required: [true, 'Address is required']
+    },
+    coordinates: {
+      latitude: {
+        type: Number,
+        required: true,
+        min: [-90, 'Latitude must be between -90 and 90'],
+        max: [90, 'Latitude must be between -90 and 90']
+      },
+      longitude: {
+        type: Number,
+        required: true,
+        min: [-180, 'Longitude must be between -180 and 180'],
+        max: [180, 'Longitude must be between -180 and 180']
+      }
+    },
+    landmark: String
+  },
+  contactInfo: {
+    primaryPhone: {
+      type: String,
+      required: [true, 'Primary phone is required']
+    },
+    alternatePhone: String,
+    emergencyContact: {
+      name: String,
+      phone: String,
+      relationship: String
     }
-  }, [isAuthenticated, user]);
-
-  const fetchEmergencies = async () => {
-    try {
-      const response = await axios.get('/api/emergency/my-emergencies');
-      setEmergencies(response.data.emergencies);
-    } catch (error) {
-      console.error('Error fetching emergencies:', error);
-    } finally {
-      setLoading(false);
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'dispatched', 'en_route', 'on_scene', 'transporting', 'completed', 'cancelled'],
+    default: 'pending'
+  },
+  assignedAmbulance: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Ambulance'
+  },
+  assignedResponders: [{
+    responder: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    role: {
+      type: String,
+      enum: ['paramedic', 'emt', 'driver', 'doctor']
+    },
+    assignedAt: {
+      type: Date,
+      default: Date.now
     }
-  };
-
-  const getStatusColor = (status) => {
-    const colors = {
-      pending: 'text-yellow-600 bg-yellow-100',
-      dispatched: 'text-blue-600 bg-blue-100',
-      en_route: 'text-purple-600 bg-purple-100',
-      on_scene: 'text-orange-600 bg-orange-100',
-      transporting: 'text-indigo-600 bg-indigo-100',
-      completed: 'text-green-600 bg-green-100',
-      cancelled: 'text-red-600 bg-red-100'
-    };
-    return colors[status] || 'text-gray-600 bg-gray-100';
-  };
-
-  const getSeverityColor = (severity) => {
-    const colors = {
-      low: 'text-green-600 bg-green-100',
-      medium: 'text-yellow-600 bg-yellow-100',
-      high: 'text-orange-600 bg-orange-100',
-      critical: 'text-red-600 bg-red-100'
-    };
-    return colors[severity] || 'text-gray-600 bg-gray-100';
-  };
-
-  const formatEmergencyType = (type) => {
-    return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-96">
-        <div className="spinner w-8 h-8"></div>
-      </div>
-    );
+  }],
+  timeline: [{
+    status: String,
+    timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    notes: String,
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }
+  }],
+  estimatedArrival: Date,
+  actualArrival: Date,
+  responseTime: Number, // in minutes
+  hospitalDestination: {
+    name: String,
+    address: String,
+    phone: String,
+    estimatedArrival: Date
+  },
+  medicalInfo: {
+    vitals: {
+      bloodPressure: String,
+      heartRate: Number,
+      temperature: Number,
+      oxygenSaturation: Number,
+      respiratoryRate: Number
+    },
+    consciousness: {
+      type: String,
+      enum: ['alert', 'verbal', 'pain', 'unresponsive']
+    },
+    allergies: [String],
+    medications: [String],
+    medicalHistory: [String],
+    treatmentGiven: [String]
+  },
+  priority: {
+    type: Number,
+    min: 1,
+    max: 5,
+    default: 3
+  },
+  images: [String], // URLs to uploaded images
+  audio: String, // URL to audio recording if any
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  feedback: {
+    rating: {
+      type: Number,
+      min: 1,
+      max: 5
+    },
+    comment: String,
+    submittedAt: Date
   }
+}, {
+  timestamps: true
+});
 
-  return (
-    <div className="space-y-6">
-      {/* Emergency Header */}
-      <div className="bg-gradient-to-r from-emergency-600 to-emergency-800 rounded-lg p-6 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold mb-2 flex items-center">
-              <ExclamationTriangleIcon className="w-8 h-8 mr-3" />
-              Emergency Services
-            </h1>
-            <p className="text-emergency-100">
-              Get immediate medical assistance when you need it most
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-emergency-200 text-sm">Emergency Hotline</p>
-            <p className="text-2xl font-bold">911</p>
-          </div>
-        </div>
-      </div>
+// Indexes for better query performance
+emergencySchema.index({ status: 1 });
+emergencySchema.index({ severity: 1 });
+emergencySchema.index({ priority: -1 });
+emergencySchema.index({ 'location.coordinates': '2dsphere' });
+emergencySchema.index({ createdAt: -1 });
+emergencySchema.index({ patient: 1 });
 
-      {/* Emergency Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="card border-emergency-200 hover:border-emergency-300 transition-colors">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-emergency-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <ExclamationTriangleIcon className="w-8 h-8 text-emergency-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Request Emergency Help</h3>
-            <p className="text-gray-600 mb-4">
-              Submit an emergency request with your location and get immediate assistance
-            </p>
-            {isAuthenticated ? (
-              <Link
-                to="/emergency/request"
-                className="btn-emergency w-full"
-              >
-                Request Help Now
-              </Link>
-            ) : (
-              <Link
-                to="/login"
-                className="btn-emergency w-full"
-              >
-                Login to Request Help
-              </Link>
-            )}
-          </div>
-        </div>
+// Calculate response time when status changes to 'on_scene'
+emergencySchema.pre('save', function(next) {
+  if (this.isModified('status') && this.status === 'on_scene' && !this.responseTime) {
+    const createdTime = this.createdAt || new Date();
+    const currentTime = new Date();
+    this.responseTime = Math.round((currentTime - createdTime) / (1000 * 60)); // in minutes
+  }
+  next();
+});
 
-        <div className="card">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <PhoneIcon className="w-8 h-8 text-blue-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Call Emergency Services</h3>
-            <p className="text-gray-600 mb-4">
-              For immediate life-threatening emergencies, call emergency services directly
-            </p>
-            <a
-              href="tel:911"
-              className="btn-primary w-full"
-            >
-              Call 911
-            </a>
-          </div>
-        </div>
+// Add timeline entry when status changes
+emergencySchema.pre('save', function(next) {
+  if (this.isModified('status')) {
+    this.timeline.push({
+      status: this.status,
+      timestamp: new Date(),
+      notes: `Status changed to ${this.status}`
+    });
+  }
+  next();
+});
 
-        <div className="card">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <HeartIcon className="w-8 h-8 text-green-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Find Nearby Hospitals</h3>
-            <p className="text-gray-600 mb-4">
-              Locate the nearest hospitals and medical facilities in your area
-            </p>
-            <button className="btn-secondary w-full">
-              Find Hospitals
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Emergency Types Guide */}
-      <div className="card">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">When to Request Emergency Help</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 className="text-lg font-medium text-emergency-600 mb-3">Critical Emergencies</h3>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li className="flex items-start">
-                <span className="w-2 h-2 bg-emergency-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                Cardiac arrest or severe chest pain
-              </li>
-              <li className="flex items-start">
-                <span className="w-2 h-2 bg-emergency-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                Stroke symptoms (face drooping, arm weakness, speech difficulty)
-              </li>
-              <li className="flex items-start">
-                <span className="w-2 h-2 bg-emergency-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                Severe bleeding that won't stop
-              </li>
-              <li className="flex items-start">
-                <span className="w-2 h-2 bg-emergency-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                Difficulty breathing or choking
-              </li>
-              <li className="flex items-start">
-                <span className="w-2 h-2 bg-emergency-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                Unconsciousness or unresponsiveness
-              </li>
-            </ul>
-          </div>
-          <div>
-            <h3 className="text-lg font-medium text-orange-600 mb-3">Urgent Situations</h3>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li className="flex items-start">
-                <span className="w-2 h-2 bg-orange-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                Severe allergic reactions
-              </li>
-              <li className="flex items-start">
-                <span className="w-2 h-2 bg-orange-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                Suspected poisoning
-              </li>
-              <li className="flex items-start">
-                <span className="w-2 h-2 bg-orange-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                Severe burns
-              </li>
-              <li className="flex items-start">
-                <span className="w-2 h-2 bg-orange-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                Suspected fractures or serious injuries
-              </li>
-              <li className="flex items-start">
-                <span className="w-2 h-2 bg-orange-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                Motor vehicle accidents
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Emergency Requests */}
-      {isAuthenticated && user?.role === 'patient' && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">Your Emergency Requests</h2>
-            {emergencies.length > 0 && (
-              <Link
-                to="/emergency/history"
-                className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-              >
-                View all
-              </Link>
-            )}
-          </div>
-
-          {emergencies.length > 0 ? (
-            <div className="space-y-4">
-              {emergencies.slice(0, 3).map((emergency) => (
-                <div key={emergency._id} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center mb-2">
-                        <h3 className="text-lg font-medium text-gray-900">
-                          {formatEmergencyType(emergency.emergencyType)}
-                        </h3>
-                        <span className={`badge ml-3 ${getSeverityColor(emergency.severity)} capitalize`}>
-                          {emergency.severity}
-                        </span>
-                        <span className={`badge ml-2 ${getStatusColor(emergency.status)} capitalize`}>
-                          {emergency.status.replace('_', ' ')}
-                        </span>
-                      </div>
-                      
-                      <p className="text-gray-600 mb-3">{emergency.description}</p>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div className="flex items-center text-gray-500">
-                          <MapPinIcon className="w-4 h-4 mr-2" />
-                          {emergency.location.address}
-                        </div>
-                        <div className="flex items-center text-gray-500">
-                          <ClockIcon className="w-4 h-4 mr-2" />
-                          {new Date(emergency.createdAt).toLocaleString()}
-                        </div>
-                        {emergency.assignedAmbulance && (
-                          <div className="flex items-center text-blue-600">
-                            <TruckIcon className="w-4 h-4 mr-2" />
-                            Ambulance: {emergency.assignedAmbulance.vehicleNumber}
-                          </div>
-                        )}
-                      </div>
-
-                      {emergency.estimatedArrival && emergency.status !== 'completed' && (
-                        <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                          <p className="text-sm text-blue-800">
-                            <ClockIcon className="w-4 h-4 inline mr-1" />
-                            Estimated arrival: {new Date(emergency.estimatedArrival).toLocaleTimeString()}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <ExclamationTriangleIcon className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-500 mb-4">No emergency requests found</p>
-              <Link
-                to="/emergency/request"
-                className="btn-emergency"
-              >
-                Request Emergency Help
-              </Link>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Emergency Tips */}
-      <div className="card bg-blue-50 border-blue-200">
-        <h2 className="text-xl font-semibold text-blue-900 mb-4">Emergency Preparedness Tips</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 className="font-medium text-blue-800 mb-2">Before an Emergency</h3>
-            <ul className="space-y-1 text-sm text-blue-700">
-              <li>• Keep emergency contacts readily available</li>
-              <li>• Know your medical conditions and medications</li>
-              <li>• Have a basic first aid kit at home</li>
-              <li>• Know the location of nearest hospitals</li>
-            </ul>
-          </div>
-          <div>
-            <h3 className="font-medium text-blue-800 mb-2">During an Emergency</h3>
-            <ul className="space-y-1 text-sm text-blue-700">
-              <li>• Stay calm and assess the situation</li>
-              <li>• Call emergency services if life-threatening</li>
-              <li>• Provide clear location information</li>
-              <li>• Follow dispatcher instructions</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+// Calculate priority based on severity and emergency type
+emergencySchema.methods.calculatePriority = function() {
+  const severityWeights = {
+    'critical': 5,
+    'high': 4,
+    'medium': 3,
+    'low': 2
+  };
+  
+  const typeWeights = {
+    'cardiac_arrest': 5,
+    'stroke': 5,
+    'severe_bleeding': 4,
+    'breathing_difficulty': 4,
+    'unconsciousness': 4,
+    'severe_pain': 3,
+    'allergic_reaction': 3,
+    'poisoning': 4,
+    'burns': 3,
+    'fracture': 2,
+    'accident': 3,
+    'other': 2
+  };
+  
+  const severityScore = severityWeights[this.severity] || 3;
+  const typeScore = typeWeights[this.emergencyType] || 2;
+  
+  this.priority = Math.min(5, Math.max(1, Math.round((severityScore + typeScore) / 2)));
 };
 
-export default Emergency;
+// Find nearby emergencies
+emergencySchema.statics.findNearby = function(coordinates, maxDistance = 10000) {
+  return this.find({
+    'location.coordinates': {
+      $near: {
+        $geometry: {
+          type: 'Point',
+          coordinates: [coordinates.longitude, coordinates.latitude]
+        },
+        $maxDistance: maxDistance
+      }
+    },
+    status: { $in: ['pending', 'dispatched', 'en_route'] }
+  });
+};
+
+// Get emergency statistics
+emergencySchema.statics.getStats = function(startDate, endDate) {
+  return this.aggregate([
+    {
+      $match: {
+        createdAt: {
+          $gte: startDate,
+          $lte: endDate
+        }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalEmergencies: { $sum: 1 },
+        avgResponseTime: { $avg: '$responseTime' },
+        severityBreakdown: {
+          $push: '$severity'
+        },
+        statusBreakdown: {
+          $push: '$status'
+        }
+      }
+    }
+  ]);
+};
+
+module.exports = mongoose.model('Emergency', emergencySchema);
